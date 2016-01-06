@@ -42,12 +42,12 @@ from shinken.objects.service import Service
 from shinken.modulesctx import modulesctx
 
 # Import a class from the livestatus module, should be already loaded!
-# livestatus = modulesctx.get_module('livestatus')
+livestatus = modulesctx.get_module('livestatus')
 
-# LiveStatusStack = livestatus.LiveStatusStack
+LiveStatusStack = livestatus.LiveStatusStack
 # LOGCLASS_INVALID = livestatus.LOGCLASS_INVALID
 # Logline = livestatus.Logline
-from module.log_line import (
+from log_line import (
     Logline,
     LOGCLASS_INVALID
 )

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-test
+
 # Copyright (C) 2009-2012:
 #    Gabes Jean, naparuba@gmail.com
 #    Gerhard Lausser, Gerhard.Lausser@consol.de
@@ -35,6 +35,7 @@ import datetime
 import re
 import sys
 import pymongo
+from pymongo import MongoClient
 
 from shinken.objects.service import Service
 from shinken.modulesctx import modulesctx
@@ -150,9 +151,10 @@ class LiveStatusLogStoreMongoDB(BaseModule):
             else:
                 # Old versions of pymongo do not known about fsync
                 if ReplicaSetConnection:
-                    self.conn = pymongo.Connection(self.mongodb_uri, fsync=self.mongodb_fsync)
+                    client = MongoClient()
+                    self.conn = MongoClient(self.mongodb_uri, fsync=self.mongodb_fsync)
                 else:
-                    self.conn = pymongo.Connection(self.mongodb_uri)
+                    self.conn = MongoClient(self.mongodb_uri)
             self.db = self.conn[self.database]
             self.db[self.collection].ensure_index([('host_name', pymongo.ASCENDING), ('time', pymongo.ASCENDING), ('lineno', pymongo.ASCENDING)], name='logs_idx')
             self.db[self.collection].ensure_index([('time', pymongo.ASCENDING), ('lineno', pymongo.ASCENDING)], name='time_1_lineno_1')
@@ -200,51 +202,25 @@ class LiveStatusLogStoreMongoDB(BaseModule):
             logger.info("[LogStoreMongoDB] Next log rotation at %s " % time.asctime(time.localtime(self.next_log_db_rotate)))
 
 
-    def manage_log_brok(self, b):
-        data = b.data
-        line = data['log']
+    def manage_log_brok(self, brok):
+        """
+        Parse a Shinken log brok to enqueue a log line for DB insertion
+        """
+        line = brok.data['log']
         if re.match("^\[[0-9]*\] [A-Z][a-z]*.:", line):
             # Match log which NOT have to be stored
-            # print "Unexpected in manage_log_brok", line
+            logger.warning('[mongo-logs] do not store: %s', line)
             return
+
         logline = Logline(line=line)
         values = logline.as_dict()
         if logline.logclass != LOGCLASS_INVALID:
-            try:
-                self.db[self.collection].insert(values)
-                self.is_connected = CONNECTED
-                # If we have a backlog from an outage, we flush these lines
-                # First we make a copy, so we can delete elements from
-                # the original self.backlog
-                backloglines = [bl for bl in self.backlog]
-                for backlogline in backloglines:
-                    try:
-                        self.db[self.collection].insert(backlogline)
-                        self.backlog.remove(backlogline)
-                    except AutoReconnect, exp:
-                        self.is_connected = SWITCHING
-                    except Exception, exp:
-                        logger.error("[LogStoreMongoDB] Got an exception inserting the backlog" % str(exp))
-            except AutoReconnect, exp:
-                if self.is_connected != SWITCHING:
-                    self.is_connected = SWITCHING
-                    time.sleep(5)
-                    # Under normal circumstances after these 5 seconds
-                    # we should have a new primary node
-                else:
-                    # Not yet? Wait, but try harder.
-                    time.sleep(0.1)
-                # At this point we must save the logline for a later attempt
-                # After 5 seconds we either have a successful write
-                # or another exception which means, we are disconnected
-                self.backlog.append(values)
-            except Exception, exp:
-                self.is_connected = DISCONNECTED
-                logger.error("[LogStoreMongoDB] Databased error occurred: %s" % exp)
-            # FIXME need access to this #self.livestatus.count_event('log_message')
+            logger.debug('[mongo-logs] store log line values: %s', values)
+            self.logs_cache.append(values)
         else:
-            logger.debug("[LogStoreMongoDB] This line is invalid: %s" % line)
+            logger.info("[mongo-logs] This line is invalid: %s", line)
 
+        return
 
     def add_filter(self, operator, attribute, reference):
         if attribute == 'time':
@@ -301,10 +277,10 @@ class LiveStatusLogStoreMongoDB(BaseModule):
         # The filters are text fragments which are put together to form a sql where-condition finally.
         # Add parameter Class (Host, Service), lookup datatype (default string), convert reference
         # which attributes are suitable for a sql statement
-        good_attributes = ['time', 'attempt', 'logclass', 'command_name', 'comment', 'contact_name', 'message', 'host_name', 'plugin_output', 'service_description', 'state', 'state_type', 'type']
+        good_attributes = ['time', 'attempt', 'logclass', 'command_name', 'comment', 'contact_name', 'host_name', 'plugin_output', 'service_description', 'state', 'state_type', 'type']
         good_operators = ['=', '!=']
         #  put strings in '' for the query
-        string_attributes = ['command_name', 'comment', 'contact_name', 'host_name', 'message', 'plugin_output', 'service_description', 'state_type', 'type']
+        string_attributes = ['command_name', 'comment', 'contact_name', 'host_name', 'plugin_output', 'service_description', 'state_type', 'type']
         if attribute in string_attributes:
             reference = "'%s'" % reference
 

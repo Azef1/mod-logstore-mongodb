@@ -436,3 +436,5 @@ class LiveStatusMongoStack(LiveStatusStack):
             return lambda: ''
         else:
             return self.get()
+
+			

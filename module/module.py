@@ -47,7 +47,7 @@ from shinken.modulesctx import modulesctx
 # LiveStatusStack = livestatus.LiveStatusStack
 # LOGCLASS_INVALID = livestatus.LOGCLASS_INVALID
 # Logline = livestatus.Logline
-from .log_line import (
+from module.log_line import (
     Logline,
     LOGCLASS_INVALID
 )

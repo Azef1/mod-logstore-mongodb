@@ -94,7 +94,7 @@ class LiveStatusLogStoreError(Exception):
 
 
 class LiveStatusLogStoreMongoDB(BaseModule):
-       def __init__(self, modconf):
+    def __init__(self, modconf):
         base_mod = BaseModule()
         logger.info("Argument=%s", base_mod.get_name())
         

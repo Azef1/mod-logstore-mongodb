@@ -3,6 +3,7 @@ mod-logstore-mongodb
 ====================
 
 Shinken module for exporting logs to mongodb from the Livestatus module
+The goal: Be compatible with pymongo V3
 
 OK -->Mongo v3 open database OK (see https://github.com/shinken-monitoring/mod-logstore-mongodb/issues/16#issuecomment-169216831)
 

@@ -36,20 +36,21 @@ import re
 import sys
 import pymongo
 from pymongo import MongoClient
+import traceback
 
 from shinken.objects.service import Service
 from shinken.modulesctx import modulesctx
 
 # Import a class from the livestatus module, should be already loaded!
-livestatus = modulesctx.get_module('livestatus')
+# livestatus = modulesctx.get_module('livestatus')
 
-# when livestatus will be correctly setup, replace:
-LiveStatusStack = livestatus.LiveStatusStack
-LOGCLASS_INVALID = livestatus.LOGCLASS_INVALID
-Logline = livestatus.Logline
-# by:
-#from livestatus import LiveStatusStack
-#from livestatus.log_line import LOGCLASS_INVALID, Logline
+# LiveStatusStack = livestatus.LiveStatusStack
+# LOGCLASS_INVALID = livestatus.LOGCLASS_INVALID
+# Logline = livestatus.Logline
+from .log_line import (
+    Logline,
+    LOGCLASS_INVALID
+)
 
 
 

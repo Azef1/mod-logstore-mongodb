@@ -202,25 +202,51 @@ class LiveStatusLogStoreMongoDB(BaseModule):
             logger.info("[LogStoreMongoDB] Next log rotation at %s " % time.asctime(time.localtime(self.next_log_db_rotate)))
 
 
-    def manage_log_brok(self, brok):
-        """
-        Parse a Shinken log brok to enqueue a log line for DB insertion
-        """
-        line = brok.data['log']
+    def manage_log_brok(self, b):
+        data = b.data
+        line = data['log']
         if re.match("^\[[0-9]*\] [A-Z][a-z]*.:", line):
             # Match log which NOT have to be stored
-            logger.warning('[mongo-logs] do not store: %s', line)
+            # print "Unexpected in manage_log_brok", line
             return
-
         logline = Logline(line=line)
         values = logline.as_dict()
         if logline.logclass != LOGCLASS_INVALID:
-            logger.debug('[mongo-logs] store log line values: %s', values)
-            self.logs_cache.append(values)
+            try:
+                self.db[self.collection].insert(values)
+                self.is_connected = CONNECTED
+                # If we have a backlog from an outage, we flush these lines
+                # First we make a copy, so we can delete elements from
+                # the original self.backlog
+                backloglines = [bl for bl in self.backlog]
+                for backlogline in backloglines:
+                    try:
+                        self.db[self.collection].insert(backlogline)
+                        self.backlog.remove(backlogline)
+                    except AutoReconnect, exp:
+                        self.is_connected = SWITCHING
+                    except Exception, exp:
+                        logger.error("[LogStoreMongoDB] Got an exception inserting the backlog" % str(exp))
+            except AutoReconnect, exp:
+                if self.is_connected != SWITCHING:
+                    self.is_connected = SWITCHING
+                    time.sleep(5)
+                    # Under normal circumstances after these 5 seconds
+                    # we should have a new primary node
+                else:
+                    # Not yet? Wait, but try harder.
+                    time.sleep(0.1)
+                # At this point we must save the logline for a later attempt
+                # After 5 seconds we either have a successful write
+                # or another exception which means, we are disconnected
+                self.backlog.append(values)
+            except Exception, exp:
+                self.is_connected = DISCONNECTED
+                logger.error("[LogStoreMongoDB] Databased error occurred: %s" % exp)
+            # FIXME need access to this #self.livestatus.count_event('log_message')
         else:
-            logger.info("[mongo-logs] This line is invalid: %s", line)
+            logger.debug("[LogStoreMongoDB] This line is invalid: %s" % line)
 
-        return
 
     def add_filter(self, operator, attribute, reference):
         if attribute == 'time':
